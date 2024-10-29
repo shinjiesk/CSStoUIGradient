@@ -4,40 +4,70 @@ local PluginButton = plugin:CreateToolbar("Gradient Tools"):CreateButton(
     "rbxassetid://0" -- Replace with an appropriate icon asset ID
 )
 
+local widget = plugin:CreateDockWidgetPluginGui(
+    "CSSGradientConverter",
+    DockWidgetPluginGuiInfo.new(Enum.InitialDockState.Float, false, false, 300, 150, 300, 150)
+)
+widget.Title = "CSS Gradient Converter"
+
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(1, 0, 1, 0)
+frame.BackgroundTransparency = 1
+frame.Parent = widget
+
+local textBox = Instance.new("TextBox")
+textBox.Size = UDim2.new(1, -20, 0, 100)
+textBox.Position = UDim2.new(0, 10, 0, 10)
+textBox.MultiLine = true
+textBox.PlaceholderText = "Paste CSS gradient here..."
+textBox.Parent = frame
+
+local button = Instance.new("TextButton")
+button.Size = UDim2.new(0, 100, 0, 30)
+button.Position = UDim2.new(0.5, -50, 1, -40)
+button.Text = "Apply Gradient"
+button.Parent = frame
+
+local function hexToRGB(hex)
+    hex = hex:gsub("#","")
+    return Color3.fromRGB(
+        tonumber("0x"..hex:sub(1,2)),
+        tonumber("0x"..hex:sub(3,4)),
+        tonumber("0x"..hex:sub(5,6))
+    )
+end
+
 local function parseCSSGradient(cssGradient)
-    -- この関数はCSSグラデーション文字列を解析します
-    -- 例: "linear-gradient(to right, #ff0000 0%, #00ff00 50%, #0000ff 100%)"
     local colors = {}
-    for color, position in cssGradient:gmatch("#(%x%x%x%x%x%x)%s*(%d*%.?%d*)%%") do
-        local r, g, b = tonumber("0x"..color:sub(1,2))/255, tonumber("0x"..color:sub(3,4))/255, tonumber("0x"..color:sub(5,6))/255
+    for color, position in cssGradient:gmatch("(#%x+)%s*(%d*%.?%d*)%%") do
+        local rgb = hexToRGB(color)
         local pos = tonumber(position) / 100
-        table.insert(colors, {Color3.new(r, g, b), pos})
+        table.insert(colors, ColorSequenceKeypoint.new(pos, rgb))
     end
     return colors
 end
 
-local function applyGradientToUIGradient(uiGradient, parsedColors)
-    local keypoints = {}
-    for _, colorData in ipairs(parsedColors) do
-        table.insert(keypoints, ColorSequenceKeypoint.new(colorData[2], colorData[1]))
-    end
-    uiGradient.Color = ColorSequence.new(keypoints)
-end
-
-local function onButtonClick()
+local function applyGradient()
     local selection = game:GetService("Selection"):Get()
     local uiGradient = selection[1]
     
     if uiGradient and uiGradient:IsA("UIGradient") then
-        local cssGradient = plugin:PromptForString("Enter CSS Gradient", "e.g. linear-gradient(to right, #ff0000 0%, #00ff00 50%, #0000ff 100%)")
+        local cssGradient = textBox.Text
+        local keypoints = parseCSSGradient(cssGradient)
         
-        if cssGradient then
-            local parsedColors = parseCSSGradient(cssGradient)
-            applyGradientToUIGradient(uiGradient, parsedColors)
+        if #keypoints > 0 then
+            local newGradient = ColorSequence.new(keypoints)
+            uiGradient.Color = newGradient
+            print("CSS Gradient applied successfully!")
+        else
+            warn("Failed to parse CSS gradient")
         end
     else
         warn("Please select a UIGradient object")
     end
 end
 
-PluginButton.Click:Connect(onButtonClick)
+button.MouseButton1Click:Connect(applyGradient)
+PluginButton.Click:Connect(function()
+    widget.Enabled = not widget.Enabled
+end)
